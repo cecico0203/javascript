@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify トップランキング</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #ranking, #search-results {
+      list-style-type: none;
+      padding: 0;
+    }
+    #ranking li, #search-results li {
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+    }
+    img {
+      width: 50px;
+      height: 50px;
+      margin-right: 10px;
+    }
+    #search-container {
+      margin-top: 20px;
+    }
+    #search-container input {
+      padding: 5px;
+      font-size: 16px;
+    }
+    #search-container button {
+      padding: 5px 10px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Spotify トップランキング</h1>
+  <button id="login">Spotifyでログイン</button>
+  <ul id="ranking"></ul>
+
+  <div id="search-container">
+    <h2>検索</h2>
+    <input type="text" id="search-input" placeholder="アーティストやトラックを検索">
+    <button id="search-button">検索</button>
+    <ul id="search-results"></ul>
+  </div>
+
+  <script>
+    const clientId = 'fbc53aaee4254343a080c6d9c0734249'; // あなたのSpotifyアプリのクライアントID
+    const redirectUri = 'http://localhost:5500'; // あなたのリダイレクトURI
+    const scopes = 'user-top-read'; // 必要なスコープ
+
+    // Spotify認証URL
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+
+    // ログインボタンのクリックイベント
+    document.getElementById('login').addEventListener('click', () => {
+      window.location.href = authUrl;
+    });
+
+    // URLのハッシュ部分からアクセストークンを取得
+    const hash = window.location.hash.substring(1).split('&').reduce((acc, item) => {
+      const [key, value] = item.split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
+    const accessToken = hash.access_token;
+
+    // トップトラックを取得して表示
+    if (accessToken) {
+      fetch('https://api.spotify.com/v1/me/top/tracks', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          const rankingList = document.getElementById('ranking');
+          rankingList.innerHTML = '<h2>トップランキング</h2>';
+          data.items.forEach((track, index) => {
+            const li = document.createElement('li');
+            const imageUrl = track.album.images[0]?.url || ''; // アルバム画像
+            const isAlbum = track.album.album_type === 'album';
+
+            li.innerHTML = `
+              <img src="${imageUrl}" alt="ジャケット画像">
+              ${index + 1}. ${track.name} by ${track.artists.map((artist) => artist.name).join(', ')} 
+              (${isAlbum ? 'アルバム' : 'シングル'})
+            `;
+            rankingList.appendChild(li);
+          });
+        })
+        .catch((error) => console.error('Spotify APIエラー:', error));
+    }
+
+    // 検索機能
+    document.getElementById('search-button').addEventListener('click', () => {
+      const query = document.getElementById('search-input').value;
+      if (!query) return;
+
+      fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track,album`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          const searchResults = document.getElementById('search-results');
+          searchResults.innerHTML = '<h2>検索結果</h2>';
+
+          // トラックの結果を表示
+          if (data.tracks?.items) {
+            data.tracks.items.forEach((track) => {
+              const li = document.createElement('li');
+              const imageUrl = track.album.images[0]?.url || ''; // トラックのアルバム画像
+              li.innerHTML = `
+                <img src="${imageUrl}" alt="ジャケット画像">
+                ${track.name} by ${track.artists.map((artist) => artist.name).join(', ')}
+              `;
+              searchResults.appendChild(li);
+            });
+          }
+
+          // アルバムの結果を表示
+          if (data.albums?.items) {
+            data.albums.items.forEach((album) => {
+              const li = document.createElement('li');
+              const imageUrl = album.images[0]?.url || ''; // アルバムの画像
+              li.innerHTML = `
+                <img src="${imageUrl}" alt="ジャケット画像">
+                ${album.name} by ${album.artists.map((artist) => artist.name).join(', ')}
+              `;
+              searchResults.appendChild(li);
+            });
+          }
+        })
+        .catch((error) => console.error('検索エラー:', error));
+    });
+  </script>
+</body>
+</html>
